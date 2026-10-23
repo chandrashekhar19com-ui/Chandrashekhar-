@@ -1,0 +1,6 @@
+{
+  "name": "BrainRoot AI",
+  "description": "BrainRoot AI: Grow Your Knowledge. Master Your Future. An AI-powered learning platform for school, higher education, professional studies and lifelong learning created by Chandrashekhar Singh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
