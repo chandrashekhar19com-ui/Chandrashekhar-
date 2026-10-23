@@ -233,7 +233,11 @@ Return ONLY valid JSON matching this structure:
   }
 ]`;
 
-        const geminiResponse = await ai.models.generateContent({
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('AI generation timeout')), 4000)
+        );
+
+        const geminiPromise = ai.models.generateContent({
           model: 'gemini-3.8-flash',
           contents: prompt,
           config: {
@@ -242,61 +246,163 @@ Return ONLY valid JSON matching this structure:
           },
         });
 
+        const geminiResponse = await Promise.race([geminiPromise, timeoutPromise]);
         const text = geminiResponse.text?.trim() || '[]';
         const questions = JSON.parse(text);
         if (Array.isArray(questions) && questions.length > 0) {
           return res.json({ questions, source: 'gemini-3.8-flash' });
         }
       } catch (err) {
-        console.warn('AI Quiz generation failed, returning curated curriculum questions:', err);
+        console.warn('AI Quiz generation failed or timed out, returning curated curriculum questions:', err);
       }
     }
 
-    // Default Curated Fallback Questions
-    const sampleQuestions = [
+    // Intelligent Subject-Aware Fallback Questions
+    const normSub = (subject || '').toLowerCase();
+    const normCh = (chapter || '').toLowerCase();
+
+    let fallbackPool = [
       {
-        id: 'cbse_q1',
-        question: `In ${subject} (${chapter}), what is the value of x if 2x + 4 = 16?`,
-        options: ['x = 4', 'x = 6', 'x = 7', 'x = 8'],
-        correctIndex: 1,
-        explanation: 'Subtract 4 from both sides: 2x = 12. Divide both sides by 2: x = 6.',
-      },
-      {
-        id: 'cbse_q2',
-        question: 'Which of the following describes the discriminant (D) of the quadratic equation ax² + bx + c = 0?',
-        options: ['D = b² - 4ac', 'D = b² + 4ac', 'D = 2a / (-b)', 'D = a² - 4bc'],
-        correctIndex: 0,
-        explanation: 'The discriminant is defined as D = b² - 4ac, which reveals the nature of the roots.',
-      },
-      {
-        id: 'cbse_q3',
-        question: 'If the discriminant D = 0, what can you conclude about the roots?',
+        id: 'fb_1',
+        question: `In ${subject} (${chapter}), what is the primary fundamental principle governing this topic?`,
         options: [
-          'No real roots exist',
-          'Two distinct real roots',
-          'Two equal real roots',
-          'Roots are imaginary and unequal',
+          `Conservation of energy and structural equilibrium in ${chapter}`,
+          'Arbitrary randomized variance without boundary limits',
+          'Empirical observation without systematic proof',
+          'Static uncoupled state transitions',
         ],
-        correctIndex: 2,
-        explanation: 'When D = 0, both roots are equal and real, given by x = -b / (2a).',
+        correctIndex: 0,
+        explanation: `In ${subject}, ${chapter} relies on established conservation and balance laws to model behavior accurately.`,
       },
       {
-        id: 'cbse_q4',
-        question: 'What is the sum of the roots of a quadratic equation ax² + bx + c = 0?',
-        options: ['c / a', '-b / a', 'b / (2a)', '-c / b'],
-        correctIndex: 1,
-        explanation: 'By Vieta’s formulas, the sum of roots is -b / a and the product of roots is c / a.',
+        id: 'fb_2',
+        question: `Which metric is most critical for evaluating performance in ${chapter}?`,
+        options: [
+          'Ratio of valid output to input resources or work',
+          'Elapsed uncalibrated total cycle time',
+          'Peak unconstrained theoretical limit',
+          'Random ambient temperature fluctuations',
+        ],
+        correctIndex: 0,
+        explanation: 'Standard academic analysis measures performance as useful output yield relative to expended input resources.',
       },
       {
-        id: 'cbse_q5',
-        question: 'What is the standard unit of electrical resistance in Physics?',
-        options: ['Ampere (A)', 'Volt (V)', 'Ohm (Ω)', 'Watt (W)'],
-        correctIndex: 2,
-        explanation: 'Ohm (represented by the Greek letter Ω) is the SI unit of electrical resistance according to Ohm’s Law (V = IR).',
+        id: 'fb_3',
+        question: `When solving problems in ${chapter}, what is the first essential step?`,
+        options: [
+          'Identify given variables and state boundary conditions clearly',
+          'Guess numerical values before applying formulas',
+          'Assume ideal conditions without verifying assumptions',
+          'Skip derivation and estimate the end result',
+        ],
+        correctIndex: 0,
+        explanation: 'Rigorous problem-solving requires explicitly defining parameters and initial boundary constraints.',
+      },
+      {
+        id: 'fb_4',
+        question: `How does increasing system scale or complexity impact ${chapter}?`,
+        options: [
+          'Introduces non-linear interactions requiring higher-order modeling',
+          'Has zero impact on state transitions or throughput',
+          'Automatically eliminates errors and noise',
+          'Renders analytical verification impossible',
+        ],
+        correctIndex: 0,
+        explanation: 'Real-world scaling generates non-linear interactions requiring robust control and parameter verification.',
+      },
+      {
+        id: 'fb_5',
+        question: `What is the standard method for error reduction in ${chapter}?`,
+        options: [
+          'Dimensional verification of units and checking asymptotic limits',
+          'Omitting units to accelerate calculation speed',
+          'Assuming linearity across all operational ranges',
+          'Relying entirely on intuition without proof',
+        ],
+        correctIndex: 0,
+        explanation: 'Dimensional analysis and edge-case limit testing prevent algebraic and conceptual errors.',
       },
     ];
 
-    res.json({ questions: sampleQuestions.slice(0, count), source: 'curated-curriculum' });
+    if (normSub.includes('math') || normCh.includes('quadratic') || normCh.includes('real number')) {
+      fallbackPool = [
+        {
+          id: 'm_1',
+          question: 'What is the discriminant formula for the quadratic equation ax² + bx + c = 0?',
+          options: ['D = b² - 4ac', 'D = b² + 4ac', 'D = 2a / (-b)', 'D = a² - 4bc'],
+          correctIndex: 0,
+          explanation: 'The discriminant D = b² - 4ac determines whether roots are real and distinct (D > 0), equal (D = 0), or complex (D < 0).',
+        },
+        {
+          id: 'm_2',
+          question: 'What are the roots of the equation x² - 5x + 6 = 0?',
+          options: ['x = 2 and x = 3', 'x = -2 and x = -3', 'x = 1 and x = 6', 'x = 0 and x = 5'],
+          correctIndex: 0,
+          explanation: 'Factoring: (x - 2)(x - 3) = 0 => x = 2 or x = 3.',
+        },
+        {
+          id: 'm_3',
+          question: 'What is the value of sin 30° + cos 60° in trigonometry?',
+          options: ['1', '√3 / 2', '1 / 2', '2'],
+          correctIndex: 0,
+          explanation: 'sin 30° = 1/2 and cos 60° = 1/2. 1/2 + 1/2 = 1.',
+        },
+        {
+          id: 'm_4',
+          question: 'If HCF(a, b) = 12 and a × b = 1800, what is LCM(a, b)?',
+          options: ['150', '120', '180', '200'],
+          correctIndex: 0,
+          explanation: 'HCF × LCM = a × b => LCM = 1800 / 12 = 150.',
+        },
+        {
+          id: 'm_5',
+          question: 'What is the product of roots (α × β) in ax² + bx + c = 0?',
+          options: ['c / a', '-b / a', 'b / (2a)', '-c / a'],
+          correctIndex: 0,
+          explanation: 'Vieta’s relations establish that product of roots is c / a and sum is -b / a.',
+        },
+      ];
+    } else if (normSub.includes('computer') || normSub.includes('data structure') || normSub.includes('algorithm') || normSub.includes('database')) {
+      fallbackPool = [
+        {
+          id: 'cs_1',
+          question: 'What is the worst-case time complexity of searching an element in an unsorted array of size N?',
+          options: ['O(N)', 'O(1)', 'O(log N)', 'O(N²)'],
+          correctIndex: 0,
+          explanation: 'Linear search in an unsorted array must check up to all N elements in the worst case.',
+        },
+        {
+          id: 'cs_2',
+          question: 'Which data structure follows the LIFO (Last-In-First-Out) principle?',
+          options: ['Stack', 'Queue', 'Binary Heap', 'Hash Table'],
+          correctIndex: 0,
+          explanation: 'A Stack strictly enforces Last-In-First-Out order.',
+        },
+        {
+          id: 'cs_3',
+          question: 'What does the "A" in ACID transactional properties represent?',
+          options: ['Atomicity', 'Availability', 'Accuracy', 'Authentication'],
+          correctIndex: 0,
+          explanation: 'Atomicity ensures that all operations in a transaction succeed or all fail together.',
+        },
+        {
+          id: 'cs_4',
+          question: 'In an In-Order traversal of a Binary Search Tree (BST), elements are visited in:',
+          options: ['Ascending sorted order', 'Descending order', 'Level-by-level order', 'Reverse pre-order'],
+          correctIndex: 0,
+          explanation: 'In-order traversal on a BST visits Left (< Root) -> Root -> Right (> Root), giving strictly ascending sorted order.',
+        },
+        {
+          id: 'cs_5',
+          question: 'Which normal form eliminates partial dependency on a composite primary key?',
+          options: ['Second Normal Form (2NF)', 'First Normal Form (1NF)', 'Third Normal Form (3NF)', 'BCNF'],
+          correctIndex: 0,
+          explanation: '2NF requires 1NF and guarantees non-key attributes are fully dependent on the entire primary key.',
+        },
+      ];
+    }
+
+    res.json({ questions: fallbackPool.slice(0, count), source: 'curated-curriculum' });
   } catch (error: any) {
     console.error('Quiz generation error:', error);
     res.status(500).json({ error: 'Failed to generate quiz' });
